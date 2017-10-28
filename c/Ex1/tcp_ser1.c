@@ -3,8 +3,9 @@ tcp_ser.c: the source file of the server in tcp transmission
 ***********************************/
 
 
-#include "headsock.h"
+#include "headsock.h"			// include headsock header file
 
+// defines max length of queue of pending connections may grow to
 #define BACKLOG 10
 
 void str_ser(int sockfd);                                                        // transmitting and receiving function
@@ -23,7 +24,7 @@ int main(void)
 		printf("error in socket!");
 		exit(1);
 	}
-	
+
 	my_addr.sin_family = AF_INET;
 	my_addr.sin_port = htons(MYTCP_PORT);				//port number
 	my_addr.sin_addr.s_addr = htonl(INADDR_ANY);
@@ -34,7 +35,10 @@ int main(void)
 		printf("error in binding");
 		exit(1);
 	}
-	
+
+	// listen(int sockfd, int backlog);
+	// listen for connections on a socket
+	// returns -1 on error, 0 on success
 	ret = listen(sockfd, BACKLOG);                              //listen
 	if (ret <0) {
 		printf("error in listening");
@@ -46,6 +50,10 @@ int main(void)
 	while (1)
 	{
 		sin_size = sizeof (struct sockaddr_in);
+		// accept(int sockfd, struct sockaddr *addr, socklen_t *addrlen);
+		// sockfd is a socket that has been create with socket()
+		// addr is a pointer to a sockaddr struct filled with addr of peer socket
+		// addrlen is a val-result arg. Initially contain size of struct pointed to by addr
 		con_fd = accept(sockfd, (struct sockaddr *)&their_addr, &sin_size);            //accept the packet
 		if (con_fd <0)
 		{
