@@ -96,7 +96,7 @@ int main(int argc, char **argv) {
 	}
 
 	if((fp = fopen ("myfile.txt","r+t")) == NULL) {
-		printf("File doesn't exit\n");
+		printf("File doesn't exist\n");
 		exit(0);
 	}
 
@@ -113,9 +113,16 @@ int main(int argc, char **argv) {
 float str_cli(FILE *fp, int sockfd, long *len) {
 	char *buf;
 	long lsize, ci;
-	char sends[DATALEN];	// packet to be sent
+
+	char sends1[DATALEN];	  // packet to be sent as 1DU
+  char sends2[DATALEN*2];  // packet to be sent as 2DU
+
 	struct ack_so ack;
 	int n, slen;
+  int acknum = 0;
+
+  int invertDL = 1;   // for checking datalen to send
+
 	float time_inv = 0.0;
 	struct timeval sendt, recvt;
 	ci = 0;
@@ -128,7 +135,7 @@ float str_cli(FILE *fp, int sockfd, long *len) {
 	lsize = ftell(fp);		// lsize get's the last pos of the file
 	rewind(fp);						// sets back the file pos. to the beginning of the file
 	printf("The file length is %d bytes\n", (int)lsize);
-	printf("the packet length is %d bytes\n",DATALEN);
+	printf("the packet length is %d bytes and %d bytes\n",DATALEN,DATALEN*2);
 
 	// allocate memory to contain the whole file.
 	buf = (char *) malloc (lsize);
@@ -145,37 +152,61 @@ float str_cli(FILE *fp, int sockfd, long *len) {
 
   /*** the whole file is loaded in the buffer. ***/
 	buf[lsize] ='\0';									       //append the end byte
+  // printf("buf[lsize]: %x\n\n",buf[lsize]);
+
 	gettimeofday(&sendt, NULL);							 //get the current time
 
 	while(ci <= lsize) {
-		if ((lsize+1-ci) <= DATALEN)	         // check if at last data unit
-			slen = lsize+1-ci;
-		else	// else send at 1 data unit worth
-			slen = DATALEN;
-		// void *memcpy(void *str1, const void *str2, size_t n)
-		// copies n characters from memory area str2 to memory area str1
-		memcpy(sends, (buf+ci), slen);
-		// ssize_t send(int sockfd, const void *buf, size_t len, int flags);
-		n = send(sockfd, &sends, slen, 0);	    // returns num of bytes sent on success, else -1 for error
+
+    if (invertDL) {
+  		if ((lsize+1-ci) <= DATALEN)	         // check if at last data unit
+  			slen = lsize+1-ci;
+  		else	// else send at 1 data unit worth
+  			slen = DATALEN;
+
+      // void *memcpy(void *str1, const void *str2, size_t n)
+  		// copies n characters from memory area str2 to memory area str1
+  		memcpy(sends1, (buf+ci), slen);
+  		// ssize_t send(int sockfd, const void *buf, size_t len, int flags);
+  		n = send(sockfd, &sends1, slen, 0);	    // returns num of bytes sent on success, else -1 for error
+      // printf("sending (invertDL = 1): %d\n",n);
+      invertDL = 0;
+    } else {
+      if ((lsize+1-ci) <= DATALEN*2)	         // check if at last data unit
+  			slen = lsize+1-ci;
+  		else	// else send at 1 data unit worth
+  			slen = DATALEN*2;
+
+      // void *memcpy(void *str1, const void *str2, size_t n)
+  		// copies n characters from memory area str2 to memory area str1
+  		memcpy(sends2, (buf+ci), slen);
+  		// ssize_t send(int sockfd, const void *buf, size_t len, int flags);
+  		n = send(sockfd, &sends2, slen, 0);	    // returns num of bytes sent on success, else -1 for error
+      // printf("sending (invertDL = 0): %d\n",n);
+      invertDL = 1;
+    }
+
+    // ssize_t recv(int s, void *buf, size_t len, int flags);
+  	// return num. bytes received or -1 if error occurred
+  	// return val. will be 0 when peer has performed an orderly shutdown
+  	// message will be stored in buf
+  	// len = size of buf
+  	if ((n = recv(sockfd, &ack, 2, 0))==-1) {
+  		printf("error when receiving\n");
+  		exit(1);
+  	}
+
+    acknum += 1;
+
+  	if (ack.num != acknum|| ack.len != 0)
+  		printf("error in transmission\n");
+
 		if(n == -1) {
-			printf("send error!");								//send the data
+			printf("send error!");
 			exit(1);
 		}
 		ci += slen;
 	}
-
-	// ssize_t recv(int s, void *buf, size_t len, int flags);
-	// return num. bytes received or -1 if error occurred
-	// return val. will be 0 when peer has performed an orderly shutdown
-	// message will be stored in buf
-	// len = size of buf
-	if ((n = recv(sockfd, &ack, 2, 0))==-1) {
-		printf("error when receiving\n");
-		exit(1);
-	}
-
-	if (ack.num != 1|| ack.len != 0)
-		printf("error in transmission\n");
 
 	gettimeofday(&recvt, NULL);
 	*len= ci;                                                         // get current time

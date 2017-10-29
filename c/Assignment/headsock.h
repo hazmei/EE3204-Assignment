@@ -33,4 +33,3 @@ struct ack_so
 	uint8_t num;
 	uint8_t len;
 };
-

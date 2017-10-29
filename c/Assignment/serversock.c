@@ -72,11 +72,12 @@ int main(void) {
 void str_ser(int sockfd) {
   char buf[BUFSIZE];
   FILE *fp;
-  char recvs[DATALEN];
+  char recvs[DATALEN*2];
   struct ack_so ack;
-  int end, n = 0;
+  int end = 0, n = 0;
   long lseek=0;
-  end = 0;
+  int invertDL = 1;   // for checking datalen to send
+  int acknum = 0;
 
   printf("receiving data!\n");
 
@@ -86,28 +87,43 @@ void str_ser(int sockfd) {
     // return val. will be 0 when peer has performed an orderly shutdown
     // message will be stored in buf
     // len = size of buf
-    if ((n= recv(sockfd, &recvs, DATALEN, 0))==-1) {
-      printf("error when receiving\n");
-      exit(1);
+    if (invertDL) {
+      n = recv(sockfd, &recvs, DATALEN, 0);
+      // printf("receiving (invertDL = 1): %d\n",n);
+      invertDL = 0;
+    } else {
+      n = recv(sockfd, &recvs, DATALEN*2, 0);
+      // printf("receiving (invertDL = 0): %d\n",n);
+      invertDL = 1;
     }
 
-    if (recvs[n-1] == '\0')	{
-      end = 1; // set end to true
-      n--;
+    if (n == -1) {
+      printf("error when receiving\n");
+      exit(1);
     }
 
     // void *memcpy(void *str1, const void *str2, size_t n)
     // copies n characters from memory area str2 to memory area str1
     memcpy((buf+lseek), recvs, n);
     lseek += n;
-  }
 
-  ack.num = 1;
-  ack.len = 0;
-  // sends acknowledgement only at the end
-  if ((n = send(sockfd, &ack, 2, 0))==-1) {
-    printf("send error!");								//send the ack
-    exit(1);
+    // printf("recevs[n-1]: %x\n\n",recvs[n-1]);
+
+    if (recvs[n-1] == '\0')	{
+      end = 1; // set end to true
+      n--;
+    }
+
+    ack.num = ++acknum;
+    ack.len = 0;
+
+    // ssize_t send(int sockfd, const void *buf, size_t len, int flags);
+    if ((n = send(sockfd, &ack, 2, 0))==-1) {
+      printf("send error!");								//send the ack
+      exit(1);
+    }
+
+
   }
 
   if ((fp = fopen ("myTCPreceive.txt","wt")) == NULL)	{
